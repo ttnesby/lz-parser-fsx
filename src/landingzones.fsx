@@ -1,89 +1,71 @@
 #load @"./../.paket/load/Legivel.fsx"
 #load @"./utils/aLogger.fsx"
 
-//namespace LandingZones
+namespace LandingZone
 
-open Legivel.Attributes
-open ALogger
-
-//type LZName = LZName of string
+open System.Text.RegularExpressions
 
 type LZType =
-| [<YamlValue("online")>] Online
-| [<YamlValue("hybrid")>] Hybrid
+| Online
+| Hybrid
 
 type EnvType =
-| [<YamlValue("dev")>] Dev
-| [<YamlValue("test")>] Test
-| [<YamlValue("prod")>] Prod
+| Dev
+| Test
+| Prod
 
-type Environment = {
-    [<YamlField("name")>] OfType: EnvType
-    monthlyLimit: uint32
+type Environment = private {
+    OfType: EnvType
+    MonthlyLimit: uint32
+}
+type NamePattern = private NamePattern of string with
+    member this.Value = let (NamePattern s) = this in s
+
+type EmailPattern = private EmailPattern of string with
+    member this.Value = let (EmailPattern s) = this in s
+
+type Contacts = private {
+    Team: NamePattern
+    Technical: EmailPattern
+    Budget: EmailPattern
 }
 
-//type TeamName = TeamName of string
-//type EMail = EMail of string
-
-type Contacts = {
-    [<YamlField("team")>]       Team: string
-    [<YamlField("technical")>]  Technical: string
-    [<YamlField("budget")>]     Budget: string
+type LandingZone = private {
+    Name: NamePattern
+    OfType: LZType
+    Environments: Environment list
+    Contacts: Contacts
 }
 
-type LandingZone = {
-    [<YamlField("lzname")>]         Name: string
-    [<YamlField("type")>]           OfType: LZType
-    [<YamlField("environments")>]   Environments: Environment list
-    [<YamlField("contacts")>]       Contacts: Contacts
-}
+module Helpers = 
+    let private namePattern = """^[a-z][a-z0-9-]{2,29}(?<!-)$"""
+    let private emailPattern = """^\S+@\S+\.\S+$"""
 
-type YamlType = 
-| [<YamlValue("landingzones")>] LandingZones = 0
+    let private isPatternCompliant s p = Regex.Match(s, p).Success
 
-type LandingZones = Map<YamlType,LandingZone list>
+    let isValidName = isPatternCompliant namePattern
+    let isEmail = isPatternCompliant emailPattern
 
-module LandingZones =
+module Environment = 
+    let create (ofType, ml) = 
+        if ml >= 500u 
+        then Ok {Environment.OfType = ofType; MonthlyLimit = ml}
+        else Error $"MonthlyLimit {ml} < 500 as the lowest limit"
 
-    module Helpers =
+module NamePattern = 
+    let create s = 
+        if Helpers.isValidName s then s |> NamePattern |> Ok else Error $"{s} is invalid name"
 
-        let errToOption (r: Result<'o,'e>) =  match r with | Error _ -> Some true | Ok _ -> None
+module EmailPattern = 
+    let create s = 
+        if Helpers.isValidName s then s |> EmailPattern |> Ok else Error $"{s} is invalid email"        
 
-        let readFile (filePath: string) =
-            try
-                filePath
-                |> fun f -> ALog.inf $"Reading yaml [{f}]"; f
-                |> System.IO.File.ReadAllText
-                |> Ok
-            with
-            | e ->
-                $"Cannot read {filePath} - {e.Message}"
-                |> ALog.logPassThroughStr ALog.err
-                |> Error
+module Contacts = 
+    let create (team, tech, bud) = 
+        let r = (NamePattern.create team, EmailPattern.create tech, EmailPattern.create bud)
+        match r with
+        | Ok team, Ok tech, Ok bud -> Ok {Contacts.Team = team; Technical = tech; Budget = bud }
+        | _ -> Error $"{team}, {tech} or {bud} has invalid name - or email pattern"
 
-    let extractYamlData (r: Legivel.Serialization.DeserializeResult<LandingZones> list) =
-            match r with
-            // expecting only 1 yaml doc
-            | [h] ->
-                match h with
-                | Legivel.Serialization.DeserializeResult.Success d ->
-                    ALog.inf "Yaml file reading completed - ok"
-                    Ok d.Data[YamlType.LandingZones]
-                | Legivel.Serialization.DeserializeResult.Error e ->
-                    ALog.err $"%A{e}"
-                    $"Yaml failure - approx. @line {e.Error.Head.Location.Line} - {e.Error.Head.Message}"
-                    |> ALog.logPassThroughStr ALog.err
-                    |> Error
-            // in case of void yaml doc 
-            | [] -> List.empty<LandingZone> |> Ok
-            // in case of multiple yaml docs
-            | _ ->
-                $"Yaml failure, expected just one yaml doc - found {List.length r} documents"
-                |> ALog.logPassThroughStr ALog.err
-                |> Error
-
-$"{__SOURCE_DIRECTORY__}/../landingzones.yaml"
-|> LandingZones.Helpers.readFile
-|> Result.map Legivel.Serialization.Deserialize<LandingZones>
-|> Result.bind LandingZones.extractYamlData
-|> Result.map (fun l -> ALog.inf $"%A{l}")
+// module LandingZone = 
+//     let create (name, ofType, envList, contacts) = 
