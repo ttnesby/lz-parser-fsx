@@ -1,0 +1,22 @@
+GENERATE-LOAD-SCRIPTS: OFF
+STORAGE: NONE
+RESTRICTION: == netcoreapp5.0
+NUGET
+  remote: https://api.nuget.org/v3/index.json
+    Fable.Core (3.4)
+      FSharp.Core (>= 4.7.2)
+    FsCheck (2.16.3)
+      FSharp.Core (>= 4.2.3)
+    FSharp.Core (6.0.1)
+    FSharp.Data (4.2.4)
+      FSharp.Core (>= 4.7.2)
+    FsToolkit.ErrorHandling (2.9)
+      FSharp.Core (>= 4.7)
+    Legivel (0.4.6)
+      FSharp.Core (>= 4.6)
+    Newtonsoft.Json (13.0.1)
+    NLog (4.7.12)
+    Thoth.Json.Net (7.1)
+      Fable.Core (>= 3.0 < 4.0)
+      FSharp.Core (>= 4.7.2)
+      Newtonsoft.Json (>= 11.0.2)

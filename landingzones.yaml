@@ -1,0 +1,33 @@
+landingzones:
+
+  - name: azure-platform
+    type: online
+    environments:
+      - name: dev
+        monthlyLimit: 2600
+      - name: test
+        monthlyLimit: 3000
+    contacts:
+        team: azure-platform
+        technical: mats.estensen@nav.no
+        budget: marius.ostby@nav.no
+
+  - name: azure-platform
+    type: hybrid
+    environments:
+      - name: dev
+        monthlyLimit: 2600
+    contacts:
+        team: azure-platform
+        technical: mats.estensen@nav.no
+        budget: marius.ostby@nav.no
+
+  - name: atom
+    type: hybrid
+    environments:
+      - name: dev
+        monthlyLimit: 2600
+    contacts:
+      team: atom
+      technical: steinar.vollebaek@nav.no
+      budget: christer.gabrielsen@nav.no

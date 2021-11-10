@@ -1,0 +1,12 @@
+generate_load_scripts: false
+source https://api.nuget.org/v3/index.json
+
+storage: none
+framework: netcoreapp5.0
+
+nuget NLog
+nuget FSCheck
+nuget FSharp.Data
+nuget Thoth.Json.Net
+nuget Legivel
+nuget FsToolkit.ErrorHandling
