@@ -3,45 +3,47 @@
 
 //namespace LandingZones
 
-type LZName = LZName of string
+open Legivel.Attributes
+open ALogger
+
+//type LZName = LZName of string
 
 type LZType =
-| Online
-| Hybrid
+| [<YamlValue("online")>] Online
+| [<YamlValue("hybrid")>] Hybrid
 
-type EnvType = 
-| Dev
-| Test
-| Prod
+type EnvType =
+| [<YamlValue("dev")>] Dev
+| [<YamlValue("test")>] Test
+| [<YamlValue("prod")>] Prod
 
 type Environment = {
-    OfType: EnvType
+    [<YamlField("name")>] OfType: EnvType
     monthlyLimit: uint32
 }
 
-type TeamName = TeamName of string
-type EMail = EMail of string
+//type TeamName = TeamName of string
+//type EMail = EMail of string
 
 type Contacts = {
-    Team: TeamName
-    Technical: EMail
-    Budget: EMail
+    [<YamlField("team")>]       Team: string
+    [<YamlField("technical")>]  Technical: string
+    [<YamlField("budget")>]     Budget: string
 }
 
 type LandingZone = {
-    Name: LZName
-    OfType: LZType
-    Environments: seq<Environment>    
-    Contacts: Contacts
+    [<YamlField("lzname")>]         Name: string
+    [<YamlField("type")>]           OfType: LZType
+    [<YamlField("environments")>]   Environments: Environment list
+    [<YamlField("contacts")>]       Contacts: Contacts
 }
 
-type LandingZones = seq<LandingZone>
+type YamlType = 
+| [<YamlValue("landingzones")>] LandingZones = 0
 
-type GetYamlFile = unit -> Result<LandingZones, string>
+type LandingZones = Map<YamlType,LandingZone list>
 
 module LandingZones =
-
-    open ALogger
 
     module Helpers =
 
@@ -59,24 +61,29 @@ module LandingZones =
                 |> ALog.logPassThroughStr ALog.err
                 |> Error
 
-    let private extractYamlData (r: Legivel.Serialization.DeserializeResult<LandingZones> list) :
-        Result<LandingZones, string> =
+    let extractYamlData (r: Legivel.Serialization.DeserializeResult<LandingZones> list) =
             match r with
             // expecting only 1 yaml doc
-            | [h:_] when List.length r = 1 ->
+            | [h] ->
                 match h with
                 | Legivel.Serialization.DeserializeResult.Success d ->
-                    ALog.inf "Yaml file parsing ok"
-                    Ok d.Data
+                    ALog.inf "Yaml file reading completed - ok"
+                    Ok d.Data[YamlType.LandingZones]
                 | Legivel.Serialization.DeserializeResult.Error e ->
-                    $"Yaml file parsing failure - %A{e}"
+                    ALog.err $"%A{e}"
+                    $"Yaml failure - approx. @line {e.Error.Head.Location.Line} - {e.Error.Head.Message}"
                     |> ALog.logPassThroughStr ALog.err
                     |> Error
+            // in case of void yaml doc 
+            | [] -> List.empty<LandingZone> |> Ok
+            // in case of multiple yaml docs
             | _ ->
-                "Yaml parsing - Either none or too many yaml documents found"
+                $"Yaml failure, expected just one yaml doc - found {List.length r} documents"
                 |> ALog.logPassThroughStr ALog.err
                 |> Error
 
 $"{__SOURCE_DIRECTORY__}/../landingzones.yaml"
 |> LandingZones.Helpers.readFile
 |> Result.map Legivel.Serialization.Deserialize<LandingZones>
+|> Result.bind LandingZones.extractYamlData
+|> Result.map (fun l -> ALog.inf $"%A{l}")

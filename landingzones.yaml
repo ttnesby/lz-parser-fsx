@@ -1,6 +1,6 @@
 landingzones:
 
-  - name: azure-platform
+  - lzname: azure-platform
     type: online
     environments:
       - name: dev
@@ -12,7 +12,7 @@ landingzones:
         technical: mats.estensen@nav.no
         budget: marius.ostby@nav.no
 
-  - name: azure-platform
+  - lzname: azure-platform
     type: hybrid
     environments:
       - name: dev
@@ -22,7 +22,7 @@ landingzones:
         technical: mats.estensen@nav.no
         budget: marius.ostby@nav.no
 
-  - name: atom
+  - lzname: atom
     type: hybrid
     environments:
       - name: dev
