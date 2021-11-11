@@ -7,6 +7,7 @@ open ALogger
 let resultAsExitCode = function | Error e -> ALog.err $"{e}"; 1 | Ok _ -> 0
 
 // verify that tenant mnggrpid integrity
+// verify git diff is ok
 
 $"{__SOURCE_DIRECTORY__}/../landingzones.yaml" 
 |> LandingZoneYaml.tryList
