@@ -1,71 +1,130 @@
-#load @"./../.paket/load/Legivel.fsx"
-#load @"./utils/aLogger.fsx"
+#load @"./landingzonesYaml.fsx"
 
 namespace LandingZone
 
-open System.Text.RegularExpressions
-
-type LZType =
-| Online
-| Hybrid
-
-type EnvType =
-| Dev
-| Test
-| Prod
+open LandingZoneYaml
 
 type Environment = private {
-    OfType: EnvType
+    OfType: DTO.EnvType
     MonthlyLimit: uint32
 }
-type NamePattern = private NamePattern of string with
+type NamePattern = private NamePattern of string
+with
     member this.Value = let (NamePattern s) = this in s
 
-type EmailPattern = private EmailPattern of string with
+type EmailPattern = private EmailPattern of string
+with
     member this.Value = let (EmailPattern s) = this in s
 
+[<RequireQualifiedAccess>]
+type Pattern =
+    private
+    | Name of np: NamePattern
+    | Email of ep: EmailPattern
+
 type Contacts = private {
-    Team: NamePattern
-    Technical: EmailPattern
-    Budget: EmailPattern
+    Team:       Pattern
+    Technical:  Pattern
+    Budget:     Pattern
 }
 
 type LandingZone = private {
-    Name: NamePattern
-    OfType: LZType
-    Environments: Environment list
-    Contacts: Contacts
+    Name:           Pattern
+    OfType:         DTO.LZType
+    Environments:   Environment list
+    Contacts:       Contacts
 }
 
-module Helpers = 
-    let private namePattern = """^[a-z][a-z0-9-]{2,29}(?<!-)$"""
-    let private emailPattern = """^\S+@\S+\.\S+$"""
+module Helpers =
 
-    let private isPatternCompliant s p = Regex.Match(s, p).Success
+    open System.Text.RegularExpressions
 
-    let isValidName = isPatternCompliant namePattern
-    let isEmail = isPatternCompliant emailPattern
+    let reNP = Regex("""^[a-z][a-z0-9-]{2,29}(?<!-)$""", RegexOptions.Compiled)
+    let reEP = Regex("""^\S+@\S+\.\S+$""", RegexOptions.Compiled)
 
-module Environment = 
-    let create (ofType, ml) = 
-        if ml >= 500u 
-        then Ok {Environment.OfType = ofType; MonthlyLimit = ml}
-        else Error $"MonthlyLimit {ml} < 500 as the lowest limit"
+    let private isPatternCompliant (pat: Regex) fType str =
+        let patErr () = $"[{str}] is not compliant with regex [{pat}]" |> Error
+        let regErr err = $"regex [{pat}] failed for [{str}] - {err}" |> Error
 
-module NamePattern = 
-    let create s = 
-        if Helpers.isValidName s then s |> NamePattern |> Ok else Error $"{s} is invalid name"
+        try if pat.Match(str).Success then str |> fType |> Ok else patErr()
+        with | e -> regErr e.Message
 
-module EmailPattern = 
-    let create s = 
-        if Helpers.isValidName s then s |> EmailPattern |> Ok else Error $"{s} is invalid email"        
+    let isValidName = isPatternCompliant reNP NamePattern
+    let isEmail = isPatternCompliant reEP EmailPattern
 
-module Contacts = 
-    let create (team, tech, bud) = 
-        let r = (NamePattern.create team, EmailPattern.create tech, EmailPattern.create bud)
-        match r with
-        | Ok team, Ok tech, Ok bud -> Ok {Contacts.Team = team; Technical = tech; Budget = bud }
-        | _ -> Error $"{team}, {tech} or {bud} has invalid name - or email pattern"
+    let okToSome r = match r with | Ok x -> Some x | Error y -> None
+    let errToSome r  = match r with | Ok x -> None | Error y -> Some y
 
-// module LandingZone = 
-//     let create (name, ofType, envList, contacts) = 
+    let listSeqRes (l: Result<'o,'e> list) =
+        let okList = l |> (List.map okToSome >> List.choose id)
+        let errList = l |> (List.map errToSome >> List.choose id)
+
+        if List.isEmpty errList then Ok okList else Error errList
+
+[<RequireQualifiedAccess>]
+module Environment =
+    let create (e: DTO.Environment) =
+        if e.monthlyLimit >= 500u
+        then Ok {Environment.OfType = e.OfType; MonthlyLimit = e.monthlyLimit}
+        else $"MonthlyLimit {e.monthlyLimit} < 500 as the lowest limit" |> Error
+
+[<RequireQualifiedAccess>]
+module NamePattern =
+    let create s = Helpers.isValidName s
+
+[<RequireQualifiedAccess>]
+module EmailPattern =
+    let create s = Helpers.isEmail s
+
+[<RequireQualifiedAccess>]
+module Pattern =
+    let asName = NamePattern.create >> Result.map Pattern.Name
+    let asEmail = EmailPattern.create >> Result.map Pattern.Email
+
+[<RequireQualifiedAccess>]
+module Contacts =
+    let create (c: DTO.Contacts) =
+        [Pattern.asName c.Team; Pattern.asEmail c.Technical; Pattern.asEmail c.Budget ]
+        |> Helpers.listSeqRes
+        |> Result.map (fun [team; tech; bud] -> {Contacts.Team = team; Technical = tech; Budget = bud })
+
+[<RequireQualifiedAccess>]
+module LandingZone =
+
+    open ALogger
+    open System.Text
+
+    let create (lz: DTO.LandingZone) = async {
+        let context = $"Landing zone [lzname: {lz.Name}, type: {lz.OfType}] errors:"
+
+        let logAndError = ALog.logPassThroughStr ALog.err >> Error
+        let appender (acc: StringBuilder) (s:string) = acc.AppendLine(s)
+        let allStrings l = l |> List.fold appender (StringBuilder().AppendLine(context)) |> fun sb -> sb.ToString()
+
+        let name = Pattern.asName lz.Name |> Result.mapError (fun e -> [e])
+        let envs = lz.Environments |> List.map Environment.create |> Helpers.listSeqRes
+        let con = Contacts.create lz.Contacts
+
+        let errList = [Helpers.errToSome name; Helpers.errToSome envs; Helpers.errToSome con]
+                        |> List.choose id
+                        |> List.concat
+        return
+            (name, envs, con)
+            |> function
+            | Ok name, Ok envs, Ok con ->
+                Ok {LandingZone.Name = name; OfType = lz.OfType; Environments = envs; Contacts = con }
+            | _ -> errList |> allStrings |> logAndError
+    }
+
+    let tryList (l: DTO.LandingZone list) =
+
+        let listSeqRes (l: Result<'o,'e> list) =
+            let okList = l |> (List.map Helpers.okToSome >> List.choose id)
+            let errList = l |> (List.map Helpers.errToSome >> List.choose id)
+
+            if List.isEmpty errList then Ok okList else Error ""
+
+        let logAndCreate (lz: DTO.LandingZone) =
+            lz |> ALog.logPassThroughX ALog.inf $"Checking [lzname: {lz.Name}, type: {lz.OfType}]" |> create
+
+        (List.map logAndCreate >> Async.Parallel >> Async.RunSynchronously >> Array.toList >> listSeqRes) l
