@@ -104,6 +104,20 @@ module LandingZone =
         if List.length l = (l |> List.map (fun e -> e.OfType) |> List.distinct |> List.length)
         then Ok l else Error ["env. duplications"]
 
+    let uniqueNameAndType (l: LandingZone list) = 
+        let mapper lz = (lz.Name,lz.OfType) 
+        ALog.inf "Checking (lzname, type) duplicates in list"
+        if List.length l = (l |> List.map mapper |> List.distinct |> List.length)
+        then Ok l 
+        else
+            l |> List.map mapper |> List.groupBy id 
+            |> List.filter (fun (_, l) -> List.length l > 1) 
+            |> List.map (fun (k,_) -> 
+                match fst k with | Pattern.Name np -> (np.Value,snd k) | Pattern.Email ep -> (ep.Value, snd k)
+                )
+            |> fun dup ->  Error $"duplicates of %A{dup} in list of landing zones"
+
+
     let create (lz: DTO.LandingZone) = async {
         let context = $"Landing zone [lzname: {lz.Name}, type: {lz.OfType}] errors:"
 
