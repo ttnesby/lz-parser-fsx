@@ -86,7 +86,10 @@ module Contacts =
     let create (c: DTO.Contacts) =
         [Pattern.asName c.Team; Pattern.asEmail c.Technical; Pattern.asEmail c.Budget ]
         |> Helpers.listSeqRes
-        |> Result.map (fun [team; tech; bud] -> {Contacts.Team = team; Technical = tech; Budget = bud })
+        |> function
+        | Ok [team; tech; bud] -> Ok {Contacts.Team = team; Technical = tech; Budget = bud }
+        | Ok _ -> Error ["Should never happen, but incomplet pattern matching is gone"]
+        | Error el -> Error el
 
 [<RequireQualifiedAccess>]
 module LandingZone =
