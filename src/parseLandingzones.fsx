@@ -4,7 +4,12 @@ open LandingZoneYaml
 open LandingZone
 open ALogger
 
+let resultAsExitCode = function | Error e -> ALog.err $"{e}"; 1 | Ok _ -> 0
+
 $"{__SOURCE_DIRECTORY__}/../landingzones.yaml" 
 |> LandingZoneYaml.tryList
 |> Result.bind LandingZone.tryList
-|> Result.map (fun l -> ALog.inf $"%A{l}")
+|> resultAsExitCode
+|> fun ec ->
+    ALog.inf $"Exit code: {ec}"
+    exit ec

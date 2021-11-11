@@ -97,6 +97,13 @@ module LandingZone =
     open ALogger
     open System.Text
 
+    let private envSize l =
+        if List.length l >= 1 && List.length l <=3 then Ok l else Error ["0 or more than 3 env."]
+
+    let private envUnique (l: DTO.Environment list) =
+        if List.length l = (l |> List.map (fun e -> e.OfType) |> List.distinct |> List.length)
+        then Ok l else Error ["env. duplications"]
+
     let create (lz: DTO.LandingZone) = async {
         let context = $"Landing zone [lzname: {lz.Name}, type: {lz.OfType}] errors:"
 
@@ -105,7 +112,10 @@ module LandingZone =
         let allStrings l = l |> List.fold appender (StringBuilder().AppendLine(context)) |> fun sb -> sb.ToString()
 
         let name = Pattern.asName lz.Name |> Result.mapError (fun e -> [e])
-        let envs = lz.Environments |> List.map Environment.create |> Helpers.listSeqRes
+        let envs = envSize lz.Environments
+                    |> Result.bind envUnique
+                    |> Result.bind (List.map Environment.create >> Helpers.listSeqRes)
+
         let con = Contacts.create lz.Contacts
 
         let errList = [Helpers.errToSome name; Helpers.errToSome envs; Helpers.errToSome con]
